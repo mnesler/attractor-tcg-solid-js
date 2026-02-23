@@ -1,19 +1,27 @@
 import { createServerFn } from '@tanstack/solid-start'
 import type { DeckCard } from '../types'
 
-export interface MoxfieldDeck {
-  id: string
-  name: string
-  format: string
-  commanders: Record<string, MoxfieldCardEntry>
-  mainboard: Record<string, MoxfieldCardEntry>
-}
-
 interface MoxfieldCardEntry {
   quantity: number
   card: {
     name: string
     type: string
+  }
+}
+
+interface MoxfieldBoard {
+  count: number
+  cards: Record<string, MoxfieldCardEntry>
+}
+
+export interface MoxfieldDeck {
+  id: string
+  name: string
+  format: string
+  boards: {
+    commanders: MoxfieldBoard
+    mainboard: MoxfieldBoard
+    [key: string]: MoxfieldBoard
   }
 }
 
@@ -44,13 +52,13 @@ export function moxfieldToDeckCards(data: MoxfieldDeck): {
   commanders: DeckCard[]
   mainboard: DeckCard[]
 } {
-  const commanders: DeckCard[] = Object.values(data.commanders ?? {}).map(
+  const commanders: DeckCard[] = Object.values(data.boards?.commanders?.cards ?? {}).map(
     (entry) => ({
       quantity: entry.quantity,
       name: entry.card.name,
     })
   )
-  const mainboard: DeckCard[] = Object.values(data.mainboard ?? {}).map(
+  const mainboard: DeckCard[] = Object.values(data.boards?.mainboard?.cards ?? {}).map(
     (entry) => ({
       quantity: entry.quantity,
       name: entry.card.name,

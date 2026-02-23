@@ -1,14 +1,9 @@
-import {
-  createRoute,
-  useParams,
-  useNavigate,
-} from '@tanstack/solid-router'
+import { createFileRoute, useNavigate } from '@tanstack/solid-router'
 import {
   createResource,
   Show,
   For,
 } from 'solid-js'
-import { Route as RootRoute } from './__root'
 import { fetchMoxfieldDeck, moxfieldToDeckCards } from '~/lib/server/moxfield'
 import { fetchScryfallCards } from '~/lib/server/scryfall'
 import { parseDecklist, buildDeckContext } from '~/lib/deck-parser'
@@ -19,9 +14,7 @@ import ShimmerCard from '~/components/ShimmerCard'
 import type { DeckCard, ScryfallCard, CardType } from '~/lib/types'
 import { CARD_TYPE_ORDER, getCardType } from '~/lib/types'
 
-export const Route = createRoute({
-  getParentRoute: () => RootRoute,
-  path: '/deck/$deckId',
+export const Route = createFileRoute('/deck/$deckId')({
   component: DeckPage,
 })
 
@@ -182,8 +175,7 @@ async function loadScryfallData(cards: DeckCard[]): Promise<ScryfallCard[]> {
 // ── Main Page Component ───────────────────────────────────────────────────────
 
 function DeckPage() {
-  // useParams returns an Accessor<{deckId: string}> in solid-router v1.16x
-  const params = useParams({ from: '/deck/$deckId' })
+  const params = Route.useParams()
   const navigate = useNavigate()
 
   const deckId = () => params().deckId

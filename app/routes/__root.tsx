@@ -1,4 +1,5 @@
 import { createRootRoute, HeadContent, Outlet, Scripts } from '@tanstack/solid-router'
+import { HydrationScript } from 'solid-js/web'
 import NavBar from '~/components/NavBar'
 
 export const Route = createRootRoute({
@@ -8,6 +9,7 @@ export const Route = createRootRoute({
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>EDH Builder</title>
+        <HydrationScript />
         <HeadContent />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link

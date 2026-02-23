@@ -1,11 +1,8 @@
-import { createRoute, useNavigate } from '@tanstack/solid-router'
+import { createFileRoute, useNavigate } from '@tanstack/solid-router'
 import { createSignal } from 'solid-js'
-import { Route as RootRoute } from './__root'
 import { parseDecklist, extractMoxfieldId } from '~/lib/deck-parser'
 
-export const Route = createRoute({
-  getParentRoute: () => RootRoute,
-  path: '/',
+export const Route = createFileRoute('/')({
   component: ImportPage,
 })
 
