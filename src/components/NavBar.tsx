@@ -15,6 +15,13 @@ export default function NavBar() {
         >
           Import Deck
         </Link>
+        <Link
+          to="/history"
+          class="nav-link"
+          activeProps={{ class: 'nav-link active' }}
+        >
+          Pipeline History
+        </Link>
       </div>
     </nav>
   )

@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from '@tanstack/solid-router'
+import { createFileRoute, useNavigate, Link } from '@tanstack/solid-router'
 import { createSignal } from 'solid-js'
 import { parseDecklist, extractMoxfieldId } from '~/lib/deck-parser'
 
@@ -179,6 +179,13 @@ function ImportPage() {
         </div>
       </div>
 
+      <div class="history-link-wrapper">
+        <Link to="/history" class="history-link">
+          <span class="history-link-icon">◉</span>
+          <span>View Pipeline History</span>
+        </Link>
+      </div>
+
       <style>{`
         .import-features {
           display: flex;
@@ -206,6 +213,36 @@ function ImportPage() {
         }
         .feature-icon {
           color: var(--neon-pink);
+        }
+
+        .history-link-wrapper {
+          margin-top: 1.5rem;
+        }
+
+        .history-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.75rem 1.5rem;
+          background: rgba(0, 245, 255, 0.08);
+          border: 1px solid rgba(0, 245, 255, 0.2);
+          border-radius: var(--radius-md);
+          color: var(--text-muted);
+          font-size: 0.9rem;
+          font-weight: 500;
+          transition: var(--transition);
+          text-decoration: none;
+        }
+
+        .history-link:hover {
+          color: var(--neon-cyan);
+          border-color: var(--neon-cyan);
+          box-shadow: 0 0 12px rgba(0, 245, 255, 0.3);
+          transform: translateY(-1px);
+        }
+
+        .history-link-icon {
+          color: var(--neon-cyan);
         }
       `}</style>
     </div>
