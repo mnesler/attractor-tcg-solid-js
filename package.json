@@ -1,0 +1,22 @@
+{
+  "name": "attractor-tcg-solid-js",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "start": "node .output/server/index.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tanstack/solid-router": "^1.158.0",
+    "@tanstack/solid-start": "^1.159.0",
+    "solid-js": "^1.9.3",
+    "vinxi": "^0.5.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.4.1"
+  }
+}
