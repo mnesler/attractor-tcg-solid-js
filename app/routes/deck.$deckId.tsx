@@ -3,6 +3,10 @@ import {
   createResource,
   Show,
   For,
+  createSignal,
+  createEffect,
+  onCleanup,
+  createMemo,
 } from 'solid-js'
 import { fetchMoxfieldDeck, moxfieldToDeckCards } from '~/lib/server/moxfield'
 import { fetchScryfallCards } from '~/lib/server/scryfall'
@@ -13,6 +17,9 @@ import Chat from '~/components/Chat'
 import ShimmerCard from '~/components/ShimmerCard'
 import type { DeckCard, ScryfallCard, CardType } from '~/lib/types'
 import { CARD_TYPE_ORDER, getCardType } from '~/lib/types'
+
+// Minimum time to show each loading stage (in ms)
+const MIN_LOADING_TIME = 500
 
 export const Route = createFileRoute('/deck/$deckId')({
   component: DeckPage,
@@ -57,51 +64,204 @@ function groupByType(
   return groups
 }
 
-// ── Shimmer Loading ───────────────────────────────────────────────────────────
+// ── Particle Background ───────────────────────────────────────────────────────
 
-function ShimmerDeckLoading() {
-  const placeholders = Array.from({ length: 60 }, (_, i) => i)
+function ParticleBackground() {
+  const particles = Array.from({ length: 20 }, (_, i) => ({
+    id: i,
+    size: Math.random() * 4 + 2,
+    left: Math.random() * 100,
+    delay: Math.random() * 5,
+    duration: Math.random() * 10 + 10,
+    color: ['#FF2D78', '#00F5FF', '#BF5FFF'][Math.floor(Math.random() * 3)],
+  }))
+
   return (
-    <div class="deck-page">
-      <div class="deck-main">
-        <div
-          class="deck-stats shimmer"
-          style={{
-            height: '120px',
-            'border-radius': '16px',
-            'margin-bottom': '2rem',
-          }}
-        />
-        <div class="deck-section">
+    <div class="particle-background" aria-hidden="true">
+      <For each={particles}>
+        {(particle) => (
           <div
-            class="shimmer"
+            class="particle"
             style={{
-              height: '28px',
-              width: '150px',
-              'border-radius': '8px',
-              'margin-bottom': '1rem',
+              width: `${particle.size}px`,
+              height: `${particle.size}px`,
+              left: `${particle.left}%`,
+              'background-color': particle.color,
+              'animation-delay': `${particle.delay}s`,
+              'animation-duration': `${particle.duration}s`,
             }}
           />
-          <div class="loading-shimmer-grid">
-            <For each={placeholders}>{() => <ShimmerCard />}</For>
+        )}
+      </For>
+    </div>
+  )
+}
+
+// ── Neon Loading Spinner ─────────────────────────────────────────────────────
+
+function NeonSpinner() {
+  return (
+    <div class="neon-spinner-container">
+      <div class="neon-spinner-ring">
+        <div class="neon-spinner-orb" />
+        <div class="neon-spinner-orb" />
+        <div class="neon-spinner-orb" />
+      </div>
+      <div class="neon-spinner-core">
+        <span class="neon-core-glyph">✦</span>
+      </div>
+      <svg class="neon-spinner-trails" viewBox="0 0 100 100">
+        <defs>
+          <linearGradient id="trail-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stop-color="#FF2D78" stop-opacity="0" />
+            <stop offset="50%" stop-color="#00F5FF" stop-opacity="0.8" />
+            <stop offset="100%" stop-color="#BF5FFF" stop-opacity="0" />
+          </linearGradient>
+        </defs>
+        <circle class="neon-trail" cx="50" cy="50" r="42" fill="none" stroke="url(#trail-gradient)" stroke-width="2" stroke-linecap="round" />
+        <circle class="neon-trail neon-trail-delayed" cx="50" cy="50" r="42" fill="none" stroke="url(#trail-gradient)" stroke-width="2" stroke-linecap="round" />
+      </svg>
+    </div>
+  )
+}
+
+// ── Progress Steps ────────────────────────────────────────────────────────────
+
+interface LoadingStep {
+  label: string
+  status: 'pending' | 'active' | 'complete'
+}
+
+function LoadingProgress(props: { steps: LoadingStep[] }) {
+  return (
+    <div class="loading-progress">
+      <For each={props.steps}>
+        {(step, index) => (
+          <div
+            class="progress-step"
+            classList={{
+              'step-pending': step.status === 'pending',
+              'step-active': step.status === 'active',
+              'step-complete': step.status === 'complete',
+            }}
+          >
+            <div class="step-indicator">
+              <Show
+                when={step.status === 'complete'}
+                fallback={
+                  <span class="step-number">{index() + 1}</span>
+                }
+              >
+                <span class="step-check">✓</span>
+              </Show>
+            </div>
+            <span class="step-label">{step.label}</span>
+            <Show when={index() < props.steps.length - 1}>
+              <div
+                class="step-connector"
+                classList={{ 'connector-complete': step.status === 'complete' }}
+              />
+            </Show>
           </div>
-        </div>
+        )}
+      </For>
+    </div>
+  )
+}
+
+// ── Animated Loading Text ─────────────────────────────────────────────────────
+
+function AnimatedLoadingText() {
+  const messages = [
+    'Summoning cards from the aether...',
+    'Consulting Scryfall archives...',
+    'Channeling mana...',
+    'Brewing your deck...',
+    'Fetching card images...',
+  ]
+  const [currentIndex, setCurrentIndex] = createSignal(0)
+  const [isVisible, setIsVisible] = createSignal(true)
+
+  createEffect(() => {
+    const interval = setInterval(() => {
+      setIsVisible(false)
+      setTimeout(() => {
+        setCurrentIndex((prev) => (prev + 1) % messages.length)
+        setIsVisible(true)
+      }, 300)
+    }, 2500)
+    onCleanup(() => clearInterval(interval))
+  })
+
+  return (
+    <div class="animated-loading-text" classList={{ 'text-visible': isVisible() }}>
+      {messages[currentIndex()]}
+    </div>
+  )
+}
+
+// ── Card Skeleton Grid ────────────────────────────────────────────────────────
+
+function CardSkeletonGrid() {
+  const placeholders = Array.from({ length: 24 }, (_, i) => i)
+  return (
+    <div class="skeleton-grid-container">
+      <div class="skeleton-section-header">
+        <div class="skeleton-title shimmer" />
+        <div class="skeleton-count shimmer" />
       </div>
-      <div class="chat-sidebar" style={{ flex: '0 0 30%' }}>
-        <div class="chat-header">
-          <div
-            class="shimmer"
-            style={{ height: '20px', width: '120px', 'border-radius': '6px' }}
-          />
-        </div>
-        <div class="chat-messages">
-          <div class="shimmer" style={{ height: '60px', 'border-radius': '12px' }} />
-          <div
-            class="shimmer"
-            style={{ height: '40px', 'border-radius': '12px', width: '70%', 'margin-left': 'auto' }}
-          />
-        </div>
+      <div class="loading-shimmer-grid">
+        <For each={placeholders}>
+          {(_, i) => (
+            <div
+              class="skeleton-card-wrapper"
+              style={{ 'animation-delay': `${i() * 30}ms` }}
+            >
+              <ShimmerCard />
+            </div>
+          )}
+        </For>
       </div>
+    </div>
+  )
+}
+
+// ── Main Loading Screen ───────────────────────────────────────────────────────
+
+function DeckLoadingScreen(props: {
+  stage: 'deck' | 'scryfall'
+  cardCount?: number
+  deckName?: string
+}) {
+  const steps = (): LoadingStep[] => [
+    {
+      label: 'Load Deck',
+      status: props.stage === 'deck' ? 'active' : 'complete',
+    },
+    {
+      label: 'Fetch Cards',
+      status: props.stage === 'deck' ? 'pending' : 'active',
+    },
+  ]
+
+  return (
+    <div class="deck-loading-screen">
+      <ParticleBackground />
+      <div class="loading-content">
+        <NeonSpinner />
+        <Show when={props.deckName}>
+          <div class="loading-deck-name">{props.deckName}</div>
+        </Show>
+        <LoadingProgress steps={steps()} />
+        <AnimatedLoadingText />
+        <Show when={props.cardCount && props.cardCount > 0}>
+          <div class="loading-stats">
+            <span class="loading-stat-value">{props.cardCount}</span>
+            <span class="loading-stat-label">cards to load</span>
+          </div>
+        </Show>
+      </div>
+      <CardSkeletonGrid />
     </div>
   )
 }
@@ -172,6 +332,47 @@ async function loadScryfallData(cards: DeckCard[]): Promise<ScryfallCard[]> {
   return callScryfallFetch(names)
 }
 
+// ── Minimum Display Time Hook ─────────────────────────────────────────────────
+
+function useMinDisplayTime(isLoading: () => boolean, minTime = MIN_LOADING_TIME) {
+  const [startTime, setStartTime] = createSignal<number | null>(null)
+  const [canShow, setCanShow] = createSignal(false)
+
+  createEffect(() => {
+    if (isLoading()) {
+      setStartTime(Date.now())
+      setCanShow(false)
+      const timer = setTimeout(() => {
+        setCanShow(true)
+      }, minTime)
+      onCleanup(() => clearTimeout(timer))
+    } else {
+      // When loading finishes, check if minimum time has passed
+      const start = startTime()
+      if (start === null) {
+        setCanShow(true)
+        return
+      }
+      const elapsed = Date.now() - start
+      const remaining = Math.max(0, minTime - elapsed)
+      
+      if (remaining === 0) {
+        setCanShow(true)
+      } else {
+        const timer = setTimeout(() => {
+          setCanShow(true)
+        }, remaining)
+        onCleanup(() => clearTimeout(timer))
+      }
+    }
+  })
+
+  return createMemo(() => {
+    // Show loading if still loading OR if minimum display time hasn't passed
+    return isLoading() || !canShow()
+  })
+}
+
 // ── Main Page Component ───────────────────────────────────────────────────────
 
 function DeckPage() {
@@ -192,6 +393,10 @@ function DeckPage() {
     () => allRawCards(),
     (cards) => loadScryfallData(cards)
   )
+
+  // Use minimum display time hooks for each loading stage
+  const showDeckLoading = useMinDisplayTime(() => deckData.loading)
+  const showScryfallLoading = useMinDisplayTime(() => scryfallData.loading)
 
   const enrichedCommanders = () => {
     const d = deckData()
@@ -227,11 +432,34 @@ function DeckPage() {
     )
   }
 
+  const loadingStage = () => {
+    if (showDeckLoading()) return 'deck' as const
+    if (showScryfallLoading()) return 'scryfall' as const
+    return null
+  }
+
+  const cardCountToLoad = () => {
+    const cards = allRawCards()
+    return cards ? cards.length : 0
+  }
+
+  // Check if we should show any loading state (including minimum display time)
+  const isLoading = () => showDeckLoading() || showScryfallLoading()
+
+  // Check if there's an actual error (not just loading)
+  const hasError = () => deckData.error && !deckData.loading
+
   return (
     <Show
-      when={!deckData.loading && !deckData.error}
+      when={!isLoading() && !hasError()}
       fallback={
-        <Show when={deckData.error} fallback={<ShimmerDeckLoading />}>
+        <Show when={hasError()} fallback={
+          <DeckLoadingScreen 
+            stage={loadingStage() ?? 'deck'} 
+            cardCount={cardCountToLoad()} 
+            deckName={deckData()?.name}
+          />
+        }>
           <div class="error-page">
             <div class="error-icon">✦</div>
             <h1 class="error-title">Failed to load deck</h1>
@@ -257,19 +485,9 @@ function DeckPage() {
           />
 
           <Show
-            when={!scryfallData.loading}
+            when={!showScryfallLoading()}
             fallback={
-              <div class="deck-section">
-                <div
-                  class="shimmer"
-                  style={{ height: '28px', width: '180px', 'border-radius': '8px', 'margin-bottom': '1rem' }}
-                />
-                <div class="loading-shimmer-grid">
-                  <For each={Array.from({ length: 40 }, (_, i) => i)}>
-                    {() => <ShimmerCard />}
-                  </For>
-                </div>
-              </div>
+              <DeckLoadingScreen stage="scryfall" cardCount={cardCountToLoad()} />
             }
           >
             <For each={CARD_TYPE_ORDER}>

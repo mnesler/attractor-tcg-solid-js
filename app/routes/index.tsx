@@ -37,6 +37,8 @@ function ImportPage() {
     }
 
     const deckId = `local_${timestamp}`
+    // Artificial delay to show loading animation
+    await new Promise(resolve => setTimeout(resolve, 500))
     await navigate({ to: '/deck/$deckId', params: { deckId } })
     setLoading(false)
   }
@@ -54,6 +56,8 @@ function ImportPage() {
     }
     setError('')
     setLoading(true)
+    // Artificial delay to show loading animation
+    await new Promise(resolve => setTimeout(resolve, 500))
     await navigate({
       to: '/deck/$deckId',
       params: { deckId: `mox_${deckId}` },
