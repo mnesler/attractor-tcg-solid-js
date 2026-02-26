@@ -1,0 +1,45 @@
+digraph mtg_assistant {
+  rankdir=LR;
+  
+  // Start node
+  start [
+    shape=circle,
+    label="Start",
+    handler=start
+  ];
+
+  // Main LLM agent node using Kimi k2 model
+  analyze [
+    shape=box,
+    label="MTG Assistant",
+    handler=codergen,
+    instruction="You are a Magic: The Gathering EDH/Commander deck building assistant with expertise in:
+- Card synergies and combo lines
+- Mana curve optimization
+- Format legality (Commander/EDH)
+- Deck archetypes and strategies
+- Card interactions and rule interpretations
+
+The user's deck context:
+{{deck_context}}
+
+User message:
+{{user_message}}
+
+Provide a concise, helpful, and specific response focused on improving their deck or answering their question.",
+    model="moonshot/kimi-k2",
+    max_tokens=1024,
+    temperature=0.7
+  ];
+
+  // Success node
+  success [
+    shape=Msquare,
+    label="Done",
+    handler=end
+  ];
+
+  // Connect the nodes
+  start -> analyze;
+  analyze -> success;
+}
