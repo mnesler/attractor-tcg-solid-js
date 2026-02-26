@@ -1,6 +1,6 @@
 const OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1/chat/completions'
 const DEFAULT_MODEL = 'moonshotai/kimi-k2.5'
-const DEFAULT_MAX_TOKENS = 1024
+const DEFAULT_MAX_TOKENS = 4096
 const DEFAULT_TEMPERATURE = 0.7
 
 export interface OpenRouterMessage {
@@ -57,9 +57,19 @@ export async function callKimi(
     )
   }
 
+  // Kimi k2.5 is a reasoning model: it may spend all of its token budget on
+  // internal chain-of-thought stored in `message.reasoning` and emit an empty
+  // `message.content` when max_tokens is too small.  If content is blank, fall
+  // back to the reasoning text so the caller always gets something useful.
   const data = (await res.json()) as {
-    choices?: Array<{ message?: { content?: string } }>
+    choices?: Array<{
+      message?: {
+        content?: string
+        reasoning?: string
+      }
+    }>
   }
 
-  return data.choices?.[0]?.message?.content ?? ''
+  const msg = data.choices?.[0]?.message
+  return msg?.content?.trim() || msg?.reasoning?.trim() || ''
 }
