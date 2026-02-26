@@ -1,0 +1,301 @@
+digraph ImplementHybridMTGAssistant {
+  graph [
+    goal="Replace local Docker model with Kimi k2.5 + minimal RAG using Scryfall for MTG deck building assistant",
+    label="Hybrid MTG Assistant Implementation",
+    default_max_retry=2
+  ]
+
+  rankdir = LR
+
+  // Terminal nodes
+  start [shape=Mdiamond, label="Start"]
+  exit  [shape=Msquare,  label="Done"]
+
+  // Stage 1: Analyze existing implementation
+  analyze [
+    shape=box,
+    label="Analyze Codebase",
+    prompt="Read and understand the current implementation. You need to understand:
+
+1. Current chat server (src/lib/server/chat.ts):
+   - How it currently uses local Docker model at localhost:12434
+   - The API interface: takes messages array and deckContext string
+   - Returns ChatResult with content or error
+   - System prompt structure
+
+2. Existing Scryfall integration (src/lib/server/scryfall.ts):
+   - fetchScryfallCards function that takes card names
+   - Rate limiting: 120ms between requests
+   - Batch processing: 75 cards per request
+
+3. Type definitions (src/lib/types.ts):
+   - ChatMessage interface
+   - ChatResult interface
+   - ScryfallCard interface
+   - DeckCard interface
+   - Deck interface
+
+After reading these files, write a brief analysis to ANALYSIS.md documenting:
+- Current flow of chat requests
+- What needs to change
+- What needs to stay the same (API compatibility)"
+  ]
+
+  // Stage 2: Create OpenRouter client
+  create_openrouter [
+    shape=box,
+    label="Create OpenRouter Client",
+    max_retries=3,
+    prompt="Create a new file: src/lib/server/openrouter.ts
+
+This file should provide a client for calling the Kimi k2.5 model via OpenRouter API.
+
+Requirements:
+1. Export interface OpenRouterMessage with role ('system' | 'user' | 'assistant') and content (string)
+2. Export interface OpenRouterOptions with optional: model, max_tokens, temperature
+3. Export async function callKimi(messages: OpenRouterMessage[], options?: OpenRouterOptions): Promise<string>
+4. Implementation details:
+   - Read OPENROUTER_API_KEY from process.env (already set in .env file)
+   - POST to https://openrouter.ai/api/v1/chat/completions
+   - Headers: Authorization Bearer token, Content-Type application/json
+   - Add HTTP-Referer and X-Title headers for OpenRouter
+   - Default model: 'moonshot/kimi-k2.5'
+   - Default max_tokens: 1024
+   - Default temperature: 0.7
+   - Handle errors gracefully with descriptive messages
+   - Return the content from choices[0].message.content
+
+Make sure the code is TypeScript and follows the existing code style in the project."
+  ]
+
+  // Stage 3: Enhance Scryfall client with search capability
+  enhance_scryfall [
+    shape=box,
+    label="Enhance Scryfall Client",
+    max_retries=3,
+    prompt="Enhance the existing file: src/lib/server/scryfall.ts
+
+DO NOT remove or modify the existing fetchScryfallCards function. ADD a new search function alongside it.
+
+Add to the file:
+1. Export interface ScryfallSearchCriteria with optional fields:
+   - colors: string[] (e.g., ['W', 'U'])
+   - type: string (e.g., 'Creature', 'Instant')
+   - cmcMin: number
+   - cmcMax: number
+   - oracle: string (text search in oracle text)
+   - commanderLegal: boolean (default true)
+   - limit: number (default 20)
+
+2. Export new function searchScryfallCards using createServerFn({ method: 'POST' }).handler()
+   - Takes ScryfallSearchCriteria as input
+   - Builds Scryfall query string:
+     * colors: add 'c:WU' format
+     * type: add 't:Creature' format
+     * cmcMin: add 'cmc>=X' format
+     * cmcMax: add 'cmc<=X' format
+     * oracle: add 'o:text' format
+     * commanderLegal: add 'legal:commander' if true
+   - Calls GET https://api.scryfall.com/cards/search?q={query}
+   - Respects rate limit: 120ms delay before request
+   - Returns array of ScryfallCard objects (limit to criteria.limit or 20)
+   - Handle errors gracefully
+
+Keep the same code style and imports as the existing file."
+  ]
+
+  // Stage 4: Create minimal RAG service
+  create_rag [
+    shape=box,
+    label="Create Minimal RAG Service",
+    max_retries=3,
+    prompt="Create a new file: src/lib/server/rag.ts
+
+This file provides basic deck analysis functionality (NO card suggestions yet - that's for a future phase).
+
+Requirements:
+1. Import necessary types from '../types'
+
+2. Export interface DeckAnalysis with fields:
+   - totalCards: number
+   - commanderColors: string[] (e.g., ['W', 'U', 'B'])
+   - manaCurve: Record<number, number> (CMC -> count)
+   - cardTypes: Record<string, number> (type name -> count)
+   - avgCMC: number
+
+3. Export function analyzeDeck(deckContext: string): DeckAnalysis
+   - Parse the deckContext string (format: '1 Card Name' per line for mainboard, 'Commander:' section for commander)
+   - Count total cards
+   - Identify commander color identity from commander section
+   - Build mana curve (count cards by CMC if available)
+   - Count card types (Creature, Instant, Sorcery, etc.)
+   - Calculate average CMC
+   - Return DeckAnalysis object
+
+Note: The deckContext is a text format like:
+```
+Commander:
+1 Atraxa, Praetors' Voice
+
+Mainboard:
+1 Sol Ring
+1 Command Tower
+...
+```
+
+Handle the parsing robustly. If card metadata (like CMC) is not available in the deckContext string, make reasonable defaults (e.g., lands = 0 CMC, assume average CMC for unknown cards).
+
+Keep the implementation simple and defensive - handle missing data gracefully."
+  ]
+
+  // Stage 5: Update chat service to use Kimi k2.5
+  update_chat [
+    shape=box,
+    label="Update Chat Service",
+    goal_gate=true,
+    max_retries=3,
+    prompt="Modify the existing file: src/lib/server/chat.ts
+
+Replace the local Docker model integration with Kimi k2.5 + basic RAG.
+
+Changes needed:
+1. Add imports:
+   - import { callKimi } from './openrouter'
+   - import { analyzeDeck } from './rag'
+
+2. Keep the same interfaces: ChatParams, ChatResult
+
+3. Keep the same export: sendChatMessage createServerFn({ method: 'POST' }).handler()
+
+4. Update the handler implementation:
+   a. Call analyzeDeck(params.deckContext) to get deck analysis
+   b. Build enhanced system prompt that includes:
+      - Original MTG assistant description
+      - Deck analysis summary (total cards, commander colors, avg CMC, mana curve)
+      - User's deck context
+   c. Build messages array (system prompt + conversation history)
+   d. Call callKimi(messages, { model: 'moonshot/kimi-k2.5', max_tokens: 1024 })
+   e. Return { content: response } on success
+   f. Handle errors and return { error: message }
+
+5. Remove all the old fetch() calls to localhost:12434
+6. Remove references to Docker model in error messages
+
+IMPORTANT: Keep the exact same API interface - the frontend should not need any changes. The function signature and return type must stay identical."
+  ]
+
+  // Stage 6: Update types if needed
+  update_types [
+    shape=box,
+    label="Update Types",
+    prompt="Review src/lib/types.ts and check if any new types are needed for the OpenRouter or RAG integration.
+
+Only add types if they're missing and needed. DO NOT remove any existing types.
+
+Possible additions:
+- Types for OpenRouter API if not already defined in openrouter.ts
+- Types for RAG service if not already defined in rag.ts
+
+If no changes are needed, just verify the file is correct and move on."
+  ]
+
+  // Stage 7: Validate TypeScript compilation
+  validate [
+    shape=box,
+    label="Validate TypeScript",
+    goal_gate=true,
+    prompt="Validate that the implementation compiles successfully.
+
+Run the TypeScript compiler to check for errors:
+1. Try: npm run typecheck
+2. Or try: npx tsc --noEmit
+3. Or try: npx tsc --project tsconfig.json --noEmit
+
+Check the output:
+- If compilation succeeds: Write a success report to VALIDATION.md
+- If there are errors: Write detailed error report to VALIDATION.md with:
+  * The exact error messages
+  * Which files have errors
+  * What needs to be fixed
+
+The validation MUST pass before we can continue."
+  ]
+
+  // Stage 8: Create manual test file
+  create_test [
+    shape=box,
+    label="Create Test File",
+    prompt="Create a new file: test-mtg-assistant.ts
+
+This is a simple manual test script to validate the integration works.
+
+The script should:
+1. Import the necessary functions (you may need to adjust imports based on the actual module structure)
+2. Set up a mock deck context (a simple EDH deck list)
+3. Create a test chat message
+4. Call the chat service
+5. Print the response
+
+Example structure:
+```typescript
+// Manual test for MTG assistant
+// Run with: npx tsx test-mtg-assistant.ts
+
+import { sendChatMessage } from './src/lib/server/chat'
+
+const mockDeckContext = \`
+Commander:
+1 Atraxa, Praetors' Voice
+
+Mainboard:
+1 Sol Ring
+1 Command Tower
+1 Evolving Wilds
+1 Cultivate
+\`
+
+async function test() {
+  console.log('Testing MTG Assistant...')
+  
+  const result = await sendChatMessage({
+    data: {
+      messages: [
+        { role: 'user', content: 'What do you think of this deck?' }
+      ],
+      deckContext: mockDeckContext
+    }
+  })
+  
+  if (result.error) {
+    console.error('Error:', result.error)
+  } else {
+    console.log('Response:', result.content)
+  }
+}
+
+test().catch(console.error)
+\`
+
+Note: Adjust the import and function call based on how the actual API works (it uses createServerFn which may need special handling for testing)."
+  ]
+
+  // Define the flow
+  start -> analyze
+  analyze -> create_openrouter
+  analyze -> enhance_scryfall
+  analyze -> create_rag
+  
+  create_openrouter -> update_chat
+  enhance_scryfall -> update_chat
+  create_rag -> update_chat
+  
+  update_chat -> update_types
+  update_types -> validate
+
+  // Success path
+  validate -> create_test [label="Valid", condition="outcome=success", weight=10]
+  create_test -> exit
+
+  // Retry path if validation fails
+  validate -> update_chat [label="Fix Errors", condition="outcome!=success", weight=5]
+}

@@ -1,0 +1,17 @@
+digraph SimpleTest {
+  graph [
+    goal="Test if Attractor MCP is working with a simple 1+1 calculation",
+    label="Simple Test Pipeline"
+  ]
+
+  start [shape=Mdiamond, label="Start"]
+  exit  [shape=Msquare,  label="Done"]
+
+  calculate [
+    shape=box,
+    label="Calculate 1+1",
+    prompt="What is 1 + 1? Write the answer to a file called ANSWER.txt"
+  ]
+
+  start -> calculate -> exit
+}

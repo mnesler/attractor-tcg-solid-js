@@ -1,0 +1,34 @@
+digraph CreateCoreFiles {
+  graph [
+    goal="Create OpenRouter client, RAG service, and enhanced Scryfall search for MTG assistant",
+    label="Core Files Creation",
+    default_max_retry=2
+  ]
+
+  start [shape=Mdiamond, label="Start"]
+  exit  [shape=Msquare,  label="Done"]
+
+  create_all [
+    shape=box,
+    label="Create Core Files",
+    goal_gate=true,
+    prompt="Create three new files for the MTG deck assistant:
+
+1. src/lib/server/openrouter.ts - OpenRouter/Kimi client
+2. src/lib/server/rag.ts - Basic deck analysis
+3. Enhance src/lib/server/scryfall.ts - Add search function
+
+Then update src/lib/server/chat.ts to use these new services.
+
+Use the existing files as reference for code style. The implementation should:
+- Use TypeScript
+- Follow existing patterns (createServerFn, etc.)
+- Keep API compatibility (no frontend changes needed)
+- Replace Docker model with Kimi k2.5 via OpenRouter
+- Add basic deck analysis to chat context
+
+Write all files and verify TypeScript compiles."
+  ]
+
+  start -> create_all -> exit
+}

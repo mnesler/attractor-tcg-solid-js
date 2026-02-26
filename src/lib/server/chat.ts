@@ -1,5 +1,7 @@
 import { createServerFn } from '@tanstack/solid-start'
 import type { ChatMessage } from '../types'
+import { callKimi } from './openrouter'
+import { analyzeDeck } from './rag'
 
 interface ChatParams {
   messages: ChatMessage[]
@@ -15,75 +17,38 @@ export const sendChatMessage = createServerFn({ method: 'POST' }).handler(
   async (ctx): Promise<ChatResult> => {
     const params = (ctx.data as unknown) as ChatParams
 
+    // --- RAG: analyse the deck and inject a structured summary ---
+    const deckAnalysis = analyzeDeck(params.deckContext)
+
     const systemPrompt = `You are a Magic: The Gathering EDH/Commander deck building assistant. You have deep knowledge of card synergies, combo lines, mana curve optimization, and format legality. Be concise, helpful, and specific to the deck provided.
+
+Deck analysis summary:
+${deckAnalysis.summary}
 
 The user's current deck:
 ${params.deckContext}`
 
-    // Build messages array with system prompt first, followed by conversation history
-    const messages: Array<{ role: string; content: string }> = [
+    // Build messages array: system prompt first, then conversation history
+    const messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
       { role: 'system', content: systemPrompt },
       ...params.messages
         .filter((m) => m.role !== 'system')
         .map((m) => ({
-          role: m.role,
+          role: m.role as 'user' | 'assistant',
           content: m.content,
         })),
     ]
 
     try {
-      const res = await fetch(
-        'http://localhost:12434/engines/llama.cpp/v1/chat/completions',
-        {
-          method: 'POST',
-          headers: {
-            'content-type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'hf.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF:Q4_K_M',
-            max_tokens: 1024,
-            messages: messages,
-          }),
-        }
-      )
-
-      if (!res.ok) {
-        let errBody: { error?: { message?: string } } = {}
-        try {
-          errBody = (await res.json()) as { error?: { message?: string } }
-        } catch {
-          // ignore
-        }
-
-        return {
-          error: `Local model error ${res.status}: ${errBody?.error?.message ?? res.statusText}`,
-        }
-      }
-
-      const data = (await res.json()) as {
-        choices?: Array<{ message?: { content?: string } }>
-        error?: { message: string }
-      }
-
-      const text = data.choices?.[0]?.message?.content ?? ''
+      const text = await callKimi(messages, {
+        model: 'moonshotai/kimi-k2.5',
+        max_tokens: 1024,
+      })
       return { content: text }
     } catch (err) {
       console.error('Chat server error:', err)
-      // Check for connection errors to the local model
-      if (
-        err instanceof Error &&
-        (err.message.includes('fetch failed') ||
-          err.message.includes('ECONNREFUSED') ||
-          err.message.includes('ENOTFOUND') ||
-          err.message.includes('connect ECONNREFUSED'))
-      ) {
-        return {
-          error:
-            'Local MTG model is not running. Start it with: docker model run hf.co/minimaxir/magic-the-gathering',
-        }
-      }
       return {
-        error: 'Failed to connect to local model. Check if Docker model runner is running.',
+        error: err instanceof Error ? err.message : 'Failed to get a response from the AI.',
       }
     }
   }
